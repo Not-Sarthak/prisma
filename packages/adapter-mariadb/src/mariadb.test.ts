@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { inferCapabilities, PrismaMariaDbAdapterFactory, rewriteConnectionString } from './mariadb'
+import { forceUtcTimezone, inferCapabilities, PrismaMariaDbAdapterFactory, rewriteConnectionString } from './mariadb'
 
 describe.each([
   ['8.0.12', { supportsRelationJoins: false }],
@@ -36,6 +36,39 @@ describe('rewriteConnectionString', () => {
       database: 'db',
     }
     expect(rewriteConnectionString(config)).toBe(config)
+  })
+})
+
+describe('forceUtcTimezone', () => {
+  test('should set timezone to +00:00 for connection string without timezone', () => {
+    const input = 'mariadb://user:pass@localhost:3306/db'
+    const result = forceUtcTimezone(input) as string
+    expect(result).toContain('timezone=')
+    expect(new URL(result).searchParams.get('timezone')).toBe('+00:00')
+  })
+
+  test('should override existing timezone in connection string', () => {
+    const input = 'mariadb://user:pass@localhost:3306/db?timezone=%2B07%3A00'
+    const result = forceUtcTimezone(input) as string
+    expect(new URL(result).searchParams.get('timezone')).toBe('+00:00')
+  })
+
+  test('should set timezone to +00:00 for config object without timezone', () => {
+    const input = { host: 'localhost', port: 3306, user: 'user', database: 'db' }
+    const result = forceUtcTimezone(input)
+    expect(result).toEqual({ ...input, timezone: '+00:00' })
+  })
+
+  test('should override existing timezone in config object', () => {
+    const input = { host: 'localhost', port: 3306, user: 'user', database: 'db', timezone: '+07:00' }
+    const result = forceUtcTimezone(input)
+    expect(result).toEqual({ host: 'localhost', port: 3306, user: 'user', database: 'db', timezone: '+00:00' })
+  })
+
+  test('should not mutate the original config object', () => {
+    const input = { host: 'localhost', timezone: '+07:00' }
+    forceUtcTimezone(input)
+    expect(input.timezone).toBe('+07:00')
   })
 })
 

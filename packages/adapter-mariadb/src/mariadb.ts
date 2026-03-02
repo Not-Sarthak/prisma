@@ -196,7 +196,7 @@ export class PrismaMariaDbAdapterFactory implements SqlDriverAdapterFactory {
   #options?: PrismaMariadbOptions
 
   constructor(config: mariadb.PoolConfig | string, options?: PrismaMariadbOptions) {
-    this.#config = rewriteConnectionString(config)
+    this.#config = forceUtcTimezone(rewriteConnectionString(config))
     this.#options = options
   }
 
@@ -274,6 +274,21 @@ export function rewriteConnectionString(config: mariadb.PoolConfig | string): ma
   }
 
   return config.replace(/^mysql:\/\//, 'mariadb://')
+}
+
+/**
+ * Forces the connection timezone to UTC. The adapter serializes Date values as
+ * UTC strings (using getUTC* methods), so the MySQL session must interpret them
+ * as UTC to avoid double-conversion. See https://github.com/prisma/prisma/issues/29096
+ */
+export function forceUtcTimezone(config: mariadb.PoolConfig | string): mariadb.PoolConfig | string {
+  if (typeof config === 'string') {
+    const url = new URL(config)
+    url.searchParams.set('timezone', '+00:00')
+    return url.toString()
+  }
+
+  return { ...config, timezone: '+00:00' }
 }
 
 type ArrayModeResult = unknown[][] & { meta?: mariadb.FieldInfo[]; affectedRows?: number; insertId?: BigInt }
